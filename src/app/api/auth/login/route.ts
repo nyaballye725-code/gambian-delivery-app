@@ -4,6 +4,7 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { createSessionToken, sessionCookieName, sessionCookieOptions } from "@/lib/auth";
 import { ensureSeeded, verifyPassword } from "@/lib/demo-data";
+import { clientAddress, rateLimit } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,14 @@ export async function POST(request: Request) {
   const password = body?.password;
   if (!email || !password) {
     return NextResponse.json({ error: "Enter your email and password." }, { status: 400 });
+  }
+
+  const attempt = rateLimit(`login:${clientAddress(request)}:${email}`, 10, 10 * 60 * 1000);
+  if (!attempt.ok) {
+    return NextResponse.json(
+      { error: "Too many sign-in attempts. Please wait a few minutes and try again." },
+      { status: 429, headers: { "Retry-After": String(attempt.retryAfterSeconds) } },
+    );
   }
 
   const [user] = await db.select().from(users).where(eq(users.email, email)).limit(1);
