@@ -1,7 +1,7 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { db } from "@/db";
-import { orders, users } from "@/db/schema";
+import { orderItems, orders, products, users } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { ensureSeeded } from "@/lib/demo-data";
 import { hydrateOrders } from "@/lib/order-query";
@@ -9,6 +9,23 @@ import { hydrateOrders } from "@/lib/order-query";
 export const dynamic = "force-dynamic";
 const validStatuses = ["pending", "confirmed", "preparing", "ready", "picked_up", "delivered", "cancelled"] as const;
 type Status = (typeof validStatuses)[number];
+
+type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/** Puts stock back when an order is cancelled or removed before delivery. */
+async function restockOrder(tx: Transaction, orderId: string) {
+  const lines = await tx
+    .select({ productId: orderItems.productId, quantity: orderItems.quantity })
+    .from(orderItems)
+    .where(eq(orderItems.orderId, orderId));
+  for (const line of lines) {
+    if (!line.productId) continue;
+    await tx
+      .update(products)
+      .set({ stock: sql`${products.stock} + ${line.quantity}` })
+      .where(eq(products.id, line.productId));
+  }
+}
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
   await ensureSeeded();
@@ -23,14 +40,24 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
   if (user.role === "admin") {
     if (body?.status && validStatuses.includes(body.status as Status)) {
-      changes.status = body.status as Status;
+      const nextStatus = body.status as Status;
+      if (order.status === "cancelled" && nextStatus !== "cancelled") {
+        return NextResponse.json({ error: "Cancelled orders cannot be reopened. Ask the customer to order again." }, { status: 409 });
+      }
+      if (order.status === "delivered" && nextStatus !== "delivered") {
+        return NextResponse.json({ error: "Delivered orders are final." }, { status: 409 });
+      }
+      changes.status = nextStatus;
     } else if (body?.status) {
       return NextResponse.json({ error: "That order status is not supported." }, { status: 400 });
     }
     if (body && Object.prototype.hasOwnProperty.call(body, "driverId")) {
+      if (!["pending", "confirmed", "preparing", "ready", "picked_up"].includes(order.status) && body.driverId !== order.driverId) {
+        return NextResponse.json({ error: "The courier can only change while an order is active." }, { status: 409 });
+      }
       if (body.driverId) {
-        const [driver] = await db.select({ id: users.id, role: users.role }).from(users).where(eq(users.id, body.driverId)).limit(1);
-        if (!driver || driver.role !== "driver") return NextResponse.json({ error: "Choose an active driver account." }, { status: 400 });
+        const [driver] = await db.select({ id: users.id, role: users.role, isActive: users.isActive }).from(users).where(eq(users.id, body.driverId)).limit(1);
+        if (!driver || driver.role !== "driver" || !driver.isActive) return NextResponse.json({ error: "Choose an active driver account." }, { status: 400 });
       }
       changes.driverId = body.driverId || null;
     }
@@ -61,7 +88,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
   if (Object.keys(changes).length === 0) return NextResponse.json({ error: "Nothing to update." }, { status: 400 });
   changes.updatedAt = updatedAt;
-  const [updated] = await db.update(orders).set(changes).where(eq(orders.id, id)).returning();
+  const cancelledNow = changes.status === "cancelled" && order.status !== "cancelled";
+  const updated = await db.transaction(async (tx) => {
+    const [row] = await tx.update(orders).set(changes).where(eq(orders.id, id)).returning();
+    if (cancelledNow) await restockOrder(tx, id);
+    return row;
+  });
   const [hydrated] = await hydrateOrders([updated]);
   return NextResponse.json({ order: hydrated });
 }
@@ -75,6 +107,11 @@ export async function DELETE(_request: Request, context: { params: Promise<{ id:
   if (!order) return NextResponse.json({ error: "Order not found." }, { status: 404 });
   const allowed = user.role === "admin" || (user.role === "customer" && order.customerId === user.id && ["pending", "cancelled"].includes(order.status));
   if (!allowed) return NextResponse.json({ error: "Only admins or the customer of a pending order can remove it." }, { status: 403 });
-  await db.delete(orders).where(eq(orders.id, id));
+  await db.transaction(async (tx) => {
+    // A cancelled order has already returned its stock; anything else still
+    // holds it, so give it back before the rows disappear.
+    if (order.status !== "cancelled") await restockOrder(tx, id);
+    await tx.delete(orders).where(eq(orders.id, id));
+  });
   return NextResponse.json({ ok: true, id });
 }

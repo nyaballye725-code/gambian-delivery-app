@@ -1,0 +1,33 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.*
+
+# next.js
+/.next/
+/out/
+next-env.d.ts
+
+# production builds
+/build
+
+# local database + runtime data
+/.data/
+
+# environment
+.env
+.env.local
+.env*.local
+
+# tooling caches
+*.tsbuildinfo
+.eslintcache
+coverage/
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.vercel

@@ -1,14 +1,20 @@
 {
-  "name": "nextjs-postgresql-template",
+  "name": "jotna-delivery-app",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --hostname 0.0.0.0",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "check": "npm run typecheck && npm run lint",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio",
+    "test:api": "node scripts/api-smoke-test.mjs"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.3.11",
     "dotenv": "17.3.1",
     "drizzle-orm": "0.45.2",
     "lucide-react": "^1.61.0",
@@ -29,5 +35,10 @@
     "postcss": "8.5.8",
     "tailwindcss": "4.1.17",
     "typescript": "5.9.3"
+  },
+  "version": "1.0.0",
+  "description": "Jotna \u2014 a multi-role local delivery platform for The Gambia (Next.js, Postgres/Drizzle).",
+  "engines": {
+    "node": ">=20"
   }
 }

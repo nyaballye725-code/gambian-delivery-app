@@ -1,5 +1,7 @@
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
+import { sql } from "drizzle-orm";
 import { db } from "@/db";
+import { ensureSchema } from "@/db/bootstrap";
 import { orderItems, orders, products, stores, users } from "@/db/schema";
 
 export const demoPassword = "jotna2026";
@@ -50,10 +52,13 @@ export async function ensureSeeded() {
 }
 
 async function seedDatabase() {
+  await ensureSchema();
   const [existing] = await db.select({ id: users.id }).from(users).limit(1);
   if (existing) return;
 
   await db.transaction(async (tx) => {
+    // Protect against two server workers seeding at the same moment.
+    await tx.execute(sql`select pg_advisory_xact_lock(728340552)`);
     const [insideTransaction] = await tx.select({ id: users.id }).from(users).limit(1);
     if (insideTransaction) return;
 

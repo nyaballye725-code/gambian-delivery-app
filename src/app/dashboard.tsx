@@ -43,7 +43,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 type Role = "admin" | "customer" | "driver";
 type OrderStatus = "pending" | "confirmed" | "preparing" | "ready" | "picked_up" | "delivered" | "cancelled";
@@ -179,6 +179,31 @@ function StatusBadge({ status }: { status: OrderStatus }) {
   return <span className={`status-badge status-${status}`}><span className="status-dot" />{statusLabel(status)}</span>;
 }
 
+const TRACKING_STEPS: { status: OrderStatus; label: string }[] = [
+  { status: "pending", label: "Order placed" },
+  { status: "confirmed", label: "Confirmed by the shop" },
+  { status: "preparing", label: "Being prepared" },
+  { status: "ready", label: "Ready for a rider" },
+  { status: "picked_up", label: "On the way" },
+  { status: "delivered", label: "Delivered" },
+];
+
+function OrderTracker({ order }: { order: OrderRecord }) {
+  if (order.status === "cancelled") return null;
+  const found = TRACKING_STEPS.findIndex((step) => step.status === order.status);
+  const current = found < 0 ? 0 : found;
+  const label = TRACKING_STEPS[current].label;
+  const progress = ((current + 1) / TRACKING_STEPS.length) * 100;
+  return (
+    <div className={`order-tracker ${order.status === "delivered" ? "order-tracker-done" : ""}`}>
+      <div className="order-tracker-track" role="progressbar" aria-valuemin={1} aria-valuemax={TRACKING_STEPS.length} aria-valuenow={current + 1} aria-label={`Order progress: ${label}`}>
+        <span style={{ width: `${progress}%` }} />
+      </div>
+      <div className="order-tracker-caption"><strong>{label}</strong><small>{order.status === "delivered" ? "Enjoy your order" : `Step ${current + 1} of ${TRACKING_STEPS.length}`}</small></div>
+    </div>
+  );
+}
+
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: () => void; label?: string }) {
   return (
     <button type="button" className={`toggle ${checked ? "toggle-on" : ""}`} role="switch" aria-checked={checked} aria-label={label || "Toggle setting"} onClick={onChange}>
@@ -188,9 +213,57 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: () =
 }
 
 function ModalFrame({ title, subtitle, onClose, children, wide = false }: { title: string; subtitle?: string; onClose: () => void; children: ReactNode; wide?: boolean }) {
+  const cardRef = useRef<HTMLElement>(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        onCloseRef.current();
+        return;
+      }
+      if (event.key !== "Tab" || !cardRef.current) return;
+      const focusable = [...cardRef.current.querySelectorAll<HTMLElement>(
+        'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      )].filter((element) => element.offsetParent !== null);
+      if (focusable.length === 0) return;
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", onKeyDown, true);
+    // Move focus into the dialog once it has rendered.
+    const frame = window.requestAnimationFrame(() => {
+      const target = cardRef.current?.querySelector<HTMLElement>("input, select, textarea") ?? cardRef.current?.querySelector<HTMLElement>("button");
+      target?.focus();
+    });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      document.removeEventListener("keydown", onKeyDown, true);
+      document.body.style.overflow = previousOverflow;
+      previouslyFocused?.focus();
+    };
+  }, []);
+
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section className={`modal-card ${wide ? "modal-wide" : ""}`} role="dialog" aria-modal="true" aria-labelledby="dialog-title">
+      <section ref={cardRef} className={`modal-card ${wide ? "modal-wide" : ""}`} role="dialog" aria-modal="true" aria-labelledby="dialog-title">
         <header className="modal-head">
           <div><h2 id="dialog-title">{title}</h2>{subtitle && <p>{subtitle}</p>}</div>
           <button type="button" className="icon-button" aria-label="Close dialog" onClick={onClose}><X size={19} /></button>
@@ -201,12 +274,31 @@ function ModalFrame({ title, subtitle, onClose, children, wide = false }: { titl
   );
 }
 
-function LoginScreen({ onLogin }: { onLogin: (email: string, password: string) => Promise<void> }) {
+function LoginScreen({ onLogin, onRegister }: {
+  onLogin: (email: string, password: string) => Promise<void>;
+  onRegister: (details: { name: string; email: string; password: string; city: string }) => Promise<void>;
+}) {
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [name, setName] = useState("");
+  const [city, setCity] = useState("Brikama");
   const [email, setEmail] = useState(DEMO_ACCOUNTS[0].email);
   const [password, setPassword] = useState(DEMO_ACCOUNTS[0].password);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [activeDemo, setActiveDemo] = useState<Role | "">("");
+
+  function switchMode(next: "signin" | "signup") {
+    setMode(next);
+    setError("");
+    setActiveDemo("");
+    if (next === "signup") {
+      setEmail("");
+      setPassword("");
+    } else {
+      setEmail(DEMO_ACCOUNTS[0].email);
+      setPassword(DEMO_ACCOUNTS[0].password);
+    }
+  }
 
   async function submit(event?: FormEvent<HTMLFormElement>, credentials?: { email: string; password: string; role: Role }) {
     event?.preventDefault();
@@ -214,7 +306,11 @@ function LoginScreen({ onLogin }: { onLogin: (email: string, password: string) =
     setBusy(true);
     setActiveDemo(credentials?.role ?? "");
     try {
-      await onLogin(credentials?.email ?? email, credentials?.password ?? password);
+      if (mode === "signup" && !credentials) {
+        await onRegister({ name, email, password, city });
+      } else {
+        await onLogin(credentials?.email ?? email, credentials?.password ?? password);
+      }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "We couldn't sign you in. Try again.");
       setBusy(false);
@@ -245,25 +341,41 @@ function LoginScreen({ onLogin }: { onLogin: (email: string, password: string) =
       <section className="login-panel">
         <div className="login-panel-inner">
           <div className="login-mobile-brand"><a href="#" className="brand brand-dark"><span className="brand-mark"><Navigation size={18} fill="currentColor" /></span><span>jotna<span className="brand-period">.</span></span></a><span className="mini-country">🇬🇲 &nbsp; THE GAMBIA</span></div>
-          <div className="login-heading"><span className="eyebrow"><span className="eyebrow-dot" /> YOUR LOCAL DELIVERY CREW</span><h2>Welcome back</h2><p>Sign in to see what’s moving around your neighbourhood.</p></div>
+          <div className="login-heading">
+            <span className="eyebrow"><span className="eyebrow-dot" /> YOUR LOCAL DELIVERY CREW</span>
+            <h2>{mode === "signin" ? "Welcome back" : "Join the neighbourhood"}</h2>
+            <p>{mode === "signin" ? "Sign in to see what’s moving around your neighbourhood." : "Create a customer account and order from local shops in minutes."}</p>
+          </div>
+          <div className="auth-tabs" role="tablist" aria-label="Sign in or create an account">
+            <button type="button" role="tab" aria-selected={mode === "signin"} className={`auth-tab ${mode === "signin" ? "auth-tab-active" : ""}`} onClick={() => switchMode("signin")}>Sign in</button>
+            <button type="button" role="tab" aria-selected={mode === "signup"} className={`auth-tab ${mode === "signup" ? "auth-tab-active" : ""}`} onClick={() => switchMode("signup")}>Create account</button>
+          </div>
           <form className="login-form" onSubmit={(event) => submit(event)}>
+            {mode === "signup" && <>
+              <label className="field-label" htmlFor="signup-name">Full name</label>
+              <div className="input-wrap"><span className="input-leading">✳</span><input id="signup-name" name="name" autoComplete="name" value={name} onChange={(event) => setName(event.target.value)} placeholder="e.g. Awa Ceesay" required minLength={2} maxLength={100} /></div>
+              <label className="field-label" htmlFor="signup-city">Neighbourhood</label>
+              <div className="input-wrap"><span className="input-leading"><MapPin size={15} /></span><input id="signup-city" name="city" autoComplete="address-level2" value={city} onChange={(event) => setCity(event.target.value)} placeholder="Serekunda" maxLength={80} /></div>
+            </>}
             <label className="field-label" htmlFor="login-email">Email address</label>
             <div className="input-wrap"><span className="input-leading">@</span><input id="login-email" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required /></div>
-            <div className="password-row"><label className="field-label" htmlFor="login-password">Password</label><span>Demo: <strong>jotna2026</strong></span></div>
-            <div className="input-wrap"><span className="input-leading"><span className="lock-symbol">⌑</span></span><input id="login-password" type="password" autoComplete="current-password" value={password} onChange={(event) => setPassword(event.target.value)} required /></div>
+            <div className="password-row"><label className="field-label" htmlFor="login-password">Password</label>{mode === "signin" ? <span>Demo: <strong>jotna2026</strong></span> : <span>At least 8 characters</span>}</div>
+            <div className="input-wrap"><span className="input-leading"><span className="lock-symbol">⌑</span></span><input id="login-password" type="password" autoComplete={mode === "signin" ? "current-password" : "new-password"} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={mode === "signup" ? "Choose a password" : undefined} required minLength={mode === "signup" ? 8 : undefined} /></div>
             {error && <div className="form-error" role="alert">{error}</div>}
-            <button className="button button-dark button-full login-submit" type="submit" disabled={busy}>{busy ? <span className="spinner" /> : <>Sign in <ArrowRight size={17} /></>}</button>
+            <button className="button button-dark button-full login-submit" type="submit" disabled={busy}>{busy ? <span className="spinner" /> : <>{mode === "signin" ? "Sign in" : "Create my account"} <ArrowRight size={17} /></>}</button>
           </form>
-          <div className="login-divider"><span />or explore a demo account<span /></div>
-          <div className="demo-list">
-            {DEMO_ACCOUNTS.map((account) => (
-              <button key={account.role} type="button" className={`demo-account ${activeDemo === account.role ? "demo-active" : ""}`} disabled={busy} onClick={() => { setEmail(account.email); setPassword(account.password); void submit(undefined, account); }}>
-                <Avatar name={account.name} color={account.color} size="small" />
-                <span className="demo-account-copy"><strong>{account.name}</strong><small>{account.role === "admin" ? "Admin dashboard" : account.role === "customer" ? "Customer account" : "Driver dashboard"}</small></span>
-                <span className="demo-enter">{activeDemo === account.role ? <span className="spinner spinner-dark" /> : <ArrowRight size={16} />}</span>
-              </button>
-            ))}
-          </div>
+          {mode === "signin" ? <>
+            <div className="login-divider"><span />or explore a demo account<span /></div>
+            <div className="demo-list">
+              {DEMO_ACCOUNTS.map((account) => (
+                <button key={account.role} type="button" className={`demo-account ${activeDemo === account.role ? "demo-active" : ""}`} disabled={busy} onClick={() => { setEmail(account.email); setPassword(account.password); void submit(undefined, account); }}>
+                  <Avatar name={account.name} color={account.color} size="small" />
+                  <span className="demo-account-copy"><strong>{account.name}</strong><small>{account.role === "admin" ? "Admin dashboard" : account.role === "customer" ? "Customer account" : "Driver dashboard"}</small></span>
+                  <span className="demo-enter">{activeDemo === account.role ? <span className="spinner spinner-dark" /> : <ArrowRight size={16} />}</span>
+                </button>
+              ))}
+            </div>
+          </> : <p className="auth-footnote">Riders and shop accounts are created by the Jotna operations team. <button type="button" className="text-button" onClick={() => switchMode("signin")}>Sign in instead</button></p>}
           <div className="login-foot"><span>🇬🇲 &nbsp; Built for The Gambia</span><span>GMD · Greater Banjul Area</span></div>
         </div>
       </section>
@@ -286,7 +398,9 @@ function OrderTable({
   orders,
   role,
   search,
+  drivers,
   onStatusChange,
+  onAssignDriver,
   onDelete,
   onCancel,
   onRefresh,
@@ -295,6 +409,8 @@ function OrderTable({
   role: Role;
   search: string;
   onStatusChange: (id: string, status: OrderStatus) => void;
+  onAssignDriver: (id: string, driverId: string | null) => void;
+  drivers: UserRecord[];
   onDelete: (order: OrderRecord) => void;
   onCancel: (order: OrderRecord) => void;
   onRefresh: () => void;
@@ -319,7 +435,7 @@ function OrderTable({
             <td><strong>{dateTime(order.createdAt)}</strong><span className="table-sub">{shortDate(order.createdAt)}</span></td>
             <td>{role === "admin" ? <label className="inline-status"><span className={`status-dot status-dot-${order.status}`} /><select value={order.status} aria-label={`Status for ${order.orderNumber}`} onChange={(event) => onStatusChange(order.id, event.target.value as OrderStatus)}>{ORDER_STATUSES.map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}</select><ChevronDown size={12} /></label> : <StatusBadge status={order.status} />}</td>
             <td><strong>{money(order.total)}</strong><span className="table-sub">{order.paymentMethod}</span></td>
-            <td>{order.driverName ? <div className="driver-cell"><Avatar name={order.driverName} size="small" /><span>{order.driverName}</span></div> : <span className="unassigned-text">{role === "customer" ? "Finding a rider" : "Unassigned"}</span>}</td>
+            <td>{role === "admin" ? <label className="inline-status courier-select"><span className={`status-dot ${order.driverId ? "status-dot-picked_up" : "status-dot-pending"}`} /><select value={order.driverId ?? ""} aria-label={`Courier for ${order.orderNumber}`} disabled={["delivered", "cancelled"].includes(order.status)} onChange={(event) => onAssignDriver(order.id, event.target.value || null)}><option value="">Unassigned</option>{drivers.filter((driver) => driver.isActive).map((driver) => <option key={driver.id} value={driver.id}>{driver.name}</option>)}</select><ChevronDown size={12} /></label> : order.driverName ? <div className="driver-cell"><Avatar name={order.driverName} size="small" /><span>{order.driverName}</span></div> : <span className="unassigned-text">{role === "customer" ? "Finding a rider" : "Unassigned"}</span>}</td>
             <td><div className="row-actions">{role === "customer" && ["pending", "confirmed"].includes(order.status) && <button type="button" className="text-button danger-text" onClick={() => onCancel(order)}>Cancel</button>}{role === "admin" && <button type="button" className="icon-button row-delete" aria-label={`Delete ${order.orderNumber}`} onClick={() => onDelete(order)}><Trash2 size={15} /></button>}</div></td>
           </tr>)}
         </tbody></table></div>
@@ -352,25 +468,35 @@ export default function DashboardApp() {
   const [cartStoreId, setCartStoreId] = useState<string | null>(null);
   const [driverTab, setDriverTab] = useState<"available" | "active" | "completed">("available");
   const [profileSaving, setProfileSaving] = useState(false);
+  const [now, setNow] = useState(() => Date.now());
+  const searchRef = useRef<HTMLInputElement>(null);
 
   const notify = useCallback((message: string) => {
     setToast(message);
     window.setTimeout(() => setToast(""), 3400);
   }, []);
 
-  const loadData = useCallback(async (role: Role) => {
-    setDataLoading(true);
-    try {
-      const data = await getWorkspace(role);
-      setOrders(data.orders);
-      setStores(data.stores);
-      setProducts(data.products);
-      setTeam(data.users);
-      return data;
-    } finally {
-      setDataLoading(false);
+  const applyWorkspace = useCallback((data: WorkspaceData, role: Role) => {
+    setOrders(data.orders);
+    setStores(data.stores);
+    setProducts(data.products);
+    setTeam(data.users);
+    if (role === "admin") {
+      // Keep the merchant panel pointed at a shop that still exists.
+      setSelectedStoreId((current) => (current && data.stores.some((store) => store.id === current) ? current : data.stores[0]?.id ?? null));
     }
   }, []);
+
+  const loadData = useCallback(async (role: Role, options?: { quiet?: boolean }) => {
+    if (!options?.quiet) setDataLoading(true);
+    try {
+      const data = await getWorkspace(role);
+      applyWorkspace(data, role);
+      return data;
+    } finally {
+      if (!options?.quiet) setDataLoading(false);
+    }
+  }, [applyWorkspace]);
 
   useEffect(() => {
     let mounted = true;
@@ -382,10 +508,7 @@ export default function DashboardApp() {
         if (result.user) {
           const data = await getWorkspace(result.user.role);
           if (mounted) {
-            setOrders(data.orders);
-            setStores(data.stores);
-            setProducts(data.products);
-            setTeam(data.users);
+            applyWorkspace(data, result.user.role);
             setView(result.user.role === "admin" ? "overview" : result.user.role === "customer" ? "home" : "deliveries");
           }
         }
@@ -397,19 +520,60 @@ export default function DashboardApp() {
     }
     void bootstrap();
     return () => { mounted = false; };
+  }, [applyWorkspace]);
+
+  // A ticking clock keeps “2m ago” style labels honest without impure renders.
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 30_000);
+    return () => window.clearInterval(timer);
   }, []);
 
+  // Keep orders, menus and the rider queue fresh while the tab is visible.
   useEffect(() => {
-    if (view === "stores" && user?.role === "admin" && stores.length && !stores.some((store) => store.id === selectedStoreId)) {
-      setSelectedStoreId(stores[0].id);
+    if (!user) return;
+    const role = user.role;
+    const timer = window.setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      void loadData(role, { quiet: true }).catch(() => undefined);
+    }, 25_000);
+    return () => window.clearInterval(timer);
+  }, [user, loadData]);
+
+  // ⌘K / Ctrl+K focuses the page search.
+  useEffect(() => {
+    function onKeyDown(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        searchRef.current?.focus();
+        searchRef.current?.select();
+      }
     }
-    if (view === "browse" && selectedStoreId && !stores.some((store) => store.id === selectedStoreId)) setSelectedStoreId(null);
-  }, [view, user?.role, stores, selectedStoreId]);
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  function openView(next: View) {
+    setView(next);
+    setSearch("");
+    setMobileOpen(false);
+    if (next === "stores" && user?.role === "admin") {
+      setSelectedStoreId((current) => (current && stores.some((store) => store.id === current) ? current : stores[0]?.id ?? null));
+    } else if (next !== "browse") {
+      setSelectedStoreId(null);
+    }
+  }
 
   async function handleLogin(email: string, password: string) {
     const result = await api<{ user: SessionUser }>("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
     setUser(result.user);
     setView(result.user.role === "admin" ? "overview" : result.user.role === "customer" ? "home" : "deliveries");
+    await loadData(result.user.role);
+  }
+
+  async function handleRegister(details: { name: string; email: string; password: string; city: string }) {
+    const result = await api<{ user: SessionUser }>("/api/auth/register", { method: "POST", body: JSON.stringify(details) });
+    setUser(result.user);
+    setView("home");
     await loadData(result.user.role);
   }
 
@@ -445,6 +609,25 @@ export default function DashboardApp() {
     } catch (reason) {
       setOrders(before);
       notify(reason instanceof Error ? reason.message : "Could not update that order.");
+    }
+  }
+
+  async function assignDriver(orderId: string, driverId: string | null) {
+    const before = orders;
+    const driver = team.find((account) => account.id === driverId);
+    setOrders((current) => current.map((order) => order.id === orderId ? {
+      ...order,
+      driverId,
+      driverName: driver?.name ?? null,
+      driverPhone: driver?.phone ?? null,
+    } : order));
+    try {
+      const result = await api<{ order: OrderRecord }>(`/api/orders/${orderId}`, { method: "PATCH", body: JSON.stringify({ driverId }) });
+      setOrders((current) => current.map((order) => order.id === orderId ? result.order : order));
+      notify(driver ? `${driver.name} is now handling ${result.order.orderNumber}.` : `Courier removed from ${result.order.orderNumber}.`);
+    } catch (reason) {
+      setOrders(before);
+      notify(reason instanceof Error ? reason.message : "Could not update the courier.");
     }
   }
 
@@ -584,6 +767,7 @@ export default function DashboardApp() {
     setProducts((current) => current.filter((item) => item.storeId !== store.id));
     try {
       await api(`/api/stores/${store.id}`, { method: "DELETE" });
+      setSelectedStoreId((current) => (current === store.id ? null : current));
       notify(`${store.name} has been removed.`);
     } catch (reason) {
       setStores(oldStores);
@@ -632,19 +816,30 @@ export default function DashboardApp() {
   }
 
   function addToCart(product: ProductRecord) {
+    if (product.stock < 1) {
+      notify(`${product.name} just sold out. Please pick something else.`);
+      return;
+    }
+    const limit = Math.min(20, product.stock);
+    if ((cart[product.id] ?? 0) >= limit) {
+      notify(product.stock < 20 ? `Only ${product.stock} × ${product.name} available today.` : "You've reached the order limit for this item.");
+      return;
+    }
     if (cartStoreId && cartStoreId !== product.storeId && Object.values(cart).some((quantity) => quantity > 0)) {
       const replace = window.confirm("Your basket has items from another shop. Start a new basket here?");
       if (!replace) return;
       setCart({});
     }
     setCartStoreId(product.storeId);
-    setCart((current) => ({ ...current, [product.id]: Math.min((current[product.id] ?? 0) + 1, 20) }));
+    setCart((current) => ({ ...current, [product.id]: Math.min((current[product.id] ?? 0) + 1, limit) }));
     notify(`${product.name} added to your basket.`);
   }
 
   function changeQuantity(productId: string, change: number) {
+    const stock = products.find((product) => product.id === productId)?.stock ?? 20;
+    const limit = Math.min(20, Math.max(0, stock));
     setCart((current) => {
-      const quantity = Math.max(0, Math.min(20, (current[productId] ?? 0) + change));
+      const quantity = Math.max(0, Math.min(limit, (current[productId] ?? 0) + change));
       const next = { ...current, [productId]: quantity };
       if (Object.values(next).every((value) => value === 0)) setCartStoreId(null);
       return next;
@@ -674,7 +869,7 @@ export default function DashboardApp() {
   const teamCustomers = team.filter((account) => account.role === "customer");
 
   if (booting) return <div className="boot-screen"><span className="brand-mark"><Navigation size={18} fill="currentColor" /></span><span className="boot-word">jotna<span>.</span></span><span className="spinner spinner-dark" /></div>;
-  if (!user) return <LoginScreen onLogin={handleLogin} />;
+  if (!user) return <LoginScreen onLogin={handleLogin} onRegister={handleRegister} />;
 
   const adminNavigation: { label: string; view: View; icon: LucideIcon }[] = [
     { label: "Overview", view: "overview", icon: LayoutDashboard },
@@ -713,7 +908,7 @@ export default function DashboardApp() {
   const chartPoints = weeklyDays.map((day, index) => `${42 + index * 82},${155 - (day.count / peakOrders) * 106}`).join(" ");
   const chartLine = `M ${chartPoints.replaceAll(" ", " L ")}`;
   const chartArea = `${chartLine} L 534,180 L 42,180 Z`;
-  const weekOrders = orders.filter((order) => Date.now() - new Date(order.createdAt).getTime() <= 7 * 24 * 60 * 60 * 1000 && order.status !== "cancelled");
+  const weekOrders = orders.filter((order) => now - new Date(order.createdAt).getTime() <= 7 * 24 * 60 * 60 * 1000 && order.status !== "cancelled");
   const weekVolume = weekOrders.reduce((sum, order) => sum + order.total, 0);
   const activeOrders = orders.filter(orderIsActive);
   const availableDrivers = teamDrivers.filter((driver) => driver.isAvailable && driver.isActive).length;
@@ -722,7 +917,7 @@ export default function DashboardApp() {
   const myDeliveries = orders.filter((order) => order.driverId === user.id);
   const driverActive = myDeliveries.filter(orderIsActive);
   const delivered = myDeliveries.filter((order) => order.status === "delivered");
-  const weeklyEarnings = delivered.filter((order) => Date.now() - new Date(order.updatedAt).getTime() < 7 * 24 * 60 * 60 * 1000).reduce((sum, order) => sum + order.deliveryFee, 0);
+  const weeklyEarnings = delivered.filter((order) => now - new Date(order.updatedAt).getTime() < 7 * 24 * 60 * 60 * 1000).reduce((sum, order) => sum + order.deliveryFee, 0);
   const activeStore = cartStore ?? currentStore;
   const storeProducts = products.filter((product) => product.storeId === currentStore?.id);
   const filteredStoreProducts = storeProducts.filter((product) => !search || `${product.name} ${product.category} ${product.description}`.toLowerCase().includes(search.toLowerCase()));
@@ -743,7 +938,7 @@ export default function DashboardApp() {
         <nav className="sidebar-nav" aria-label="Main navigation">
           {navigation.map((item) => {
             const Icon = item.icon;
-            return <button type="button" key={item.view} className={`nav-link ${view === item.view ? "nav-link-active" : ""}`} onClick={() => { setView(item.view); setMobileOpen(false); setSearch(""); if (item.view !== "browse") setSelectedStoreId(null); }}><Icon size={18} strokeWidth={1.8} /><span>{item.label}</span>{item.view === "orders" && user.role === "admin" && activeOrders.length > 0 && <span className="nav-count">{activeOrders.length}</span>}</button>;
+            return <button type="button" key={item.view} className={`nav-link ${view === item.view ? "nav-link-active" : ""}`} onClick={() => openView(item.view)}><Icon size={18} strokeWidth={1.8} /><span>{item.label}</span>{item.view === "orders" && user.role === "admin" && activeOrders.length > 0 && <span className="nav-count">{activeOrders.length}</span>}</button>;
           })}
         </nav>
         {user.role === "driver" && <div className="sidebar-online-card"><div><span className={`online-dot ${user.isAvailable ? "" : "offline-dot"}`} /><strong>{user.isAvailable ? "You’re online" : "You’re offline"}</strong></div><p>{user.isAvailable ? "Ready for your next delivery." : "Go online to see nearby orders."}</p><button type="button" className={`button ${user.isAvailable ? "button-outline-light" : "button-lime"} button-small button-full`} onClick={() => void toggleDriverAvailability(user)}>{user.isAvailable ? "Go offline" : "Go online"}</button></div>}
@@ -758,12 +953,12 @@ export default function DashboardApp() {
           <button className="mobile-menu icon-button" aria-label="Open navigation" onClick={() => setMobileOpen(true)}><Menu size={20} /></button>
           <div className="topbar-page"><span className="topbar-home">Jotna</span><ChevronRight size={14} /><strong>{pageTitle[view]}</strong></div>
           <div className="topbar-spacer" />
-          <label className="global-search"><Search size={16} /><input aria-label="Search this page" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={user.role === "customer" && view === "browse" ? "Find a local favourite…" : "Search this page…"} /><kbd>⌘ K</kbd></label>
+          <label className="global-search"><Search size={16} /><input ref={searchRef} aria-label="Search this page" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={user.role === "customer" && view === "browse" ? "Find a local favourite…" : "Search this page…"} /><kbd>⌘ K</kbd></label>
           <div className="topbar-divider" />
           <button className="topbar-zone" type="button" onClick={() => notify("Serving Greater Banjul, from Bakau to Brikama.")}><MapPin size={16} /><span><small>DELIVERING IN</small><strong>Greater Banjul</strong></span><ChevronDown size={13} /></button>
           <button type="button" className="notification-button" aria-label="Notifications" onClick={() => notify("You’re all caught up — nothing new to report.")}><Bell size={18} /><i /></button>
           {user.role === "customer" && <button type="button" className="topbar-cart" aria-label={`Open basket with ${cartCount} items`} onClick={() => { if (cartStore) setDialog({ type: "checkout", store: cartStore }); else setView("browse"); }}><ShoppingCart size={17} />{cartCount > 0 && <span>{cartCount}</span>}</button>}
-          {user.role === "admin" && <button type="button" className="button button-dark topbar-action" onClick={() => { setView("browse"); setSelectedStoreId(null); }}><Plus size={16} /> New order</button>}
+          {user.role === "admin" && <button type="button" className="button button-dark topbar-action" onClick={() => setDialog({ type: "store" })}><Plus size={16} /> Add a shop</button>}
         </header>
 
         <div className="page-content">
@@ -787,9 +982,9 @@ export default function DashboardApp() {
           </>}
 
           {view === "orders" && <>
-            <div className="page-heading"><div><span className="eyebrow"><span className="eyebrow-dot" /> {user.role === "customer" ? "YOUR JOTNA JOURNEY" : "KEEP THINGS MOVING"}</span><h1>{user.role === "customer" ? "Your orders" : "Order central"}</h1><p>{user.role === "customer" ? "Every local favourite, from the first tap to the front door." : "Track every order, rider and local favourite in one place."}</p></div>{user.role === "admin" && <button type="button" className="button button-dark" onClick={() => { setView("browse"); setSelectedStoreId(null); }}><Plus size={16} /> Create an order</button>}{user.role === "customer" && <button type="button" className="button button-dark" onClick={() => { setView("browse"); setSelectedStoreId(null); }}><Plus size={16} /> Order something good</button>}</div>
+            <div className="page-heading"><div><span className="eyebrow"><span className="eyebrow-dot" /> {user.role === "customer" ? "YOUR JOTNA JOURNEY" : "KEEP THINGS MOVING"}</span><h1>{user.role === "customer" ? "Your orders" : "Order central"}</h1><p>{user.role === "customer" ? "Every local favourite, from the first tap to the front door." : "Track every order, rider and local favourite in one place."}</p></div>{user.role === "customer" && <button type="button" className="button button-dark" onClick={() => { setView("browse"); setSelectedStoreId(null); }}><Plus size={16} /> Order something good</button>}</div>
             <div className="order-summary-strip"><div><span className="summary-icon summary-green"><ShoppingBag size={17} /></span><span><strong>{orders.length}</strong><small>Total orders</small></span></div><div><span className="summary-icon summary-peach"><Clock3 size={17} /></span><span><strong>{orders.filter(orderIsActive).length}</strong><small>In progress</small></span></div><div><span className="summary-icon summary-blue"><CheckCircle2 size={17} /></span><span><strong>{orders.filter((order) => order.status === "delivered").length}</strong><small>Delivered</small></span></div><div className="summary-note"><span className="online-pulse" /> Updated in real time</div></div>
-            <OrderTable orders={orders} role={user.role} search={search} onStatusChange={(id, status) => void updateOrder(id, { status })} onDelete={(order) => void deleteOrder(order)} onCancel={(order) => void cancelOrder(order)} onRefresh={() => void refreshData()} />
+            <OrderTable orders={orders} role={user.role} search={search} drivers={teamDrivers} onStatusChange={(id, status) => void updateOrder(id, { status })} onAssignDriver={(id, driverId) => void assignDriver(id, driverId)} onDelete={(order) => void deleteOrder(order)} onCancel={(order) => void cancelOrder(order)} onRefresh={() => void refreshData()} />
           </>}
 
           {view === "stores" && user.role === "admin" && <>
@@ -831,7 +1026,7 @@ export default function DashboardApp() {
               <button type="button" className="back-link" onClick={() => setSelectedStoreId(null)}><ChevronLeft size={16} /> All neighbourhood favourites</button>
               <div className="store-detail-banner"><div className="store-detail-image">{currentStore.emoji}<span>✳</span><i>✽</i></div><div className="store-detail-copy"><span className="eyebrow"><span className="eyebrow-dot" /> A LOCAL FAVOURITE</span><h1>{currentStore.name}</h1><p>{currentStore.category} · {currentStore.location}</p><div className="store-detail-facts"><span><Star size={14} fill="currentColor" /> {currentStore.rating} rating</span><span><Clock3 size={14} /> {currentStore.prepTime}</span><span><Bike size={14} /> Delivery {money(currentStore.deliveryFee)}</span></div></div><span className={`store-open-pill ${currentStore.isOpen ? "" : "store-closed-pill"}`}><span />{currentStore.isOpen ? "Open now" : "Closed"}</span></div>
               <div className="store-menu-heading"><div><span className="eyebrow"><span className="eyebrow-dot" /> MADE WITH CARE</span><h2>Good things on the menu</h2><p>Pick a favourite to add it to your basket.</p></div>{cartCount > 0 && <button type="button" className="button button-dark" onClick={() => setDialog({ type: "checkout", store: currentStore })}><ShoppingCart size={16} /> Basket · {cartCount} <span>{money(cartSubtotal + currentStore.deliveryFee)}</span><ArrowRight size={15} /></button>}</div>
-              {filteredStoreProducts.length === 0 ? <EmptyState icon={Utensils} title="A little quiet in the kitchen" body="There are no available menu items here just yet." /> : <div className="product-card-grid">{filteredStoreProducts.filter((product) => product.isAvailable).map((product) => <article className="browse-product-card" key={product.id}><div className="browse-product-illustration"><span>{product.emoji}</span><span className="product-heart" aria-hidden="true">✳</span><span className="product-category">{product.category}</span></div><div className="browse-product-content"><h3>{product.name}</h3><p>{product.description || "Freshly prepared by your local favourite."}</p><div className="browse-product-bottom"><strong>{money(product.price)}</strong><button type="button" className="add-product-button" aria-label={`Add ${product.name} to basket`} onClick={() => addToCart(product)}><Plus size={17} /></button></div></div></article>)}</div>}
+              {filteredStoreProducts.length === 0 ? <EmptyState icon={Utensils} title="A little quiet in the kitchen" body="There are no available menu items here just yet." /> : <div className="product-card-grid">{filteredStoreProducts.filter((product) => product.isAvailable).map((product) => <article className={`browse-product-card ${product.stock === 0 ? "product-sold-out" : ""}`} key={product.id}><div className="browse-product-illustration"><span>{product.emoji}</span><span className="product-heart" aria-hidden="true">✳</span><span className="product-category">{product.category}</span></div><div className="browse-product-content"><h3>{product.name}</h3><p>{product.description || "Freshly prepared by your local favourite."}</p><div className="browse-product-bottom"><strong>{money(product.price)}</strong>{product.stock === 0 ? <span className="product-stock product-stock-out">Sold out</span> : product.stock <= 5 ? <span className="product-stock">Only {product.stock} left</span> : null}{product.stock === 0 ? <button type="button" className="add-product-button" disabled aria-label={`${product.name} is sold out`}><X size={16} /></button> : <button type="button" className="add-product-button" aria-label={`Add ${product.name} to basket`} onClick={() => addToCart(product)}><Plus size={17} /></button>}</div></div></article>)}</div>}
             </>}
           </>}
 
@@ -872,7 +1067,7 @@ function StoreCard({ store, productCount, onClick, featured = false }: { store: 
 }
 
 function CustomerOrderCard({ order, onCancel }: { order: OrderRecord; onCancel: () => void }) {
-  return <article className="customer-order-card"><div className="customer-order-emoji">{order.storeName.includes("Market") || order.storeName.includes("Groceries") ? "🧺" : "🍽️"}</div><div className="customer-order-main"><div className="customer-order-heading"><strong>{order.orderNumber} <span>·</span> {order.storeName}</strong><StatusBadge status={order.status} /></div><p>{order.items.map((item) => `${item.quantity} × ${item.productName}`).join(" · ")}</p><div className="customer-order-meta"><span><Clock3 size={13} /> {humanTime(order.createdAt)}</span><span><MapPin size={13} /> {order.deliveryAddress}</span></div></div><div className="customer-order-total"><strong>{money(order.total)}</strong>{["pending", "confirmed"].includes(order.status) && <button className="text-button danger-text" type="button" onClick={onCancel}>Cancel order</button>}</div><ArrowRight className="customer-order-arrow" size={16} /></article>;
+  return <article className="customer-order-card"><div className="customer-order-emoji">{order.storeName.includes("Market") || order.storeName.includes("Groceries") ? "🧺" : "🍽️"}</div><div className="customer-order-main"><div className="customer-order-heading"><strong>{order.orderNumber} <span>·</span> {order.storeName}</strong><StatusBadge status={order.status} /></div><p>{order.items.map((item) => `${item.quantity} × ${item.productName}`).join(" · ")}</p><div className="customer-order-meta"><span><Clock3 size={13} /> {humanTime(order.createdAt)}</span><span><MapPin size={13} /> {order.deliveryAddress}</span></div><OrderTracker order={order} /></div><div className="customer-order-total"><strong>{money(order.total)}</strong>{["pending", "confirmed"].includes(order.status) && <button className="text-button danger-text" type="button" onClick={onCancel}>Cancel order</button>}</div><ArrowRight className="customer-order-arrow" size={16} /></article>;
 }
 
 function DeliveryCard({ order, mode, onAccept, onProgress }: { order: OrderRecord; mode: "available" | "active"; onAccept: () => void; onProgress: (status: OrderStatus) => void }) {

@@ -21,8 +21,13 @@ export async function listOrdersForUser(user: SessionUser) {
 export async function hydrateOrders(rows: (typeof orders.$inferSelect)[]) {
   if (rows.length === 0) return [];
   const orderIds = rows.map((order) => order.id);
+  const peopleIds = new Set<string>();
+  for (const order of rows) {
+    peopleIds.add(order.customerId);
+    if (order.driverId) peopleIds.add(order.driverId);
+  }
   const [people, lines] = await Promise.all([
-    db.select({ id: users.id, name: users.name, phone: users.phone }).from(users),
+    db.select({ id: users.id, name: users.name, phone: users.phone }).from(users).where(inArray(users.id, [...peopleIds])),
     db.select().from(orderItems).where(inArray(orderItems.orderId, orderIds)),
   ]);
   const peopleById = new Map(people.map((person) => [person.id, person]));

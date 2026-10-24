@@ -1,4 +1,6 @@
-import { createHmac, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
 import { eq } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { db } from "@/db";
@@ -9,10 +11,36 @@ const sessionLifetime = 60 * 60 * 24 * 30;
 
 export type SessionUser = Omit<typeof users.$inferSelect, "passwordHash">;
 
+const developmentSecret = "jotna-development-session-secret";
+let cachedSecret: string | undefined;
+
+/**
+ * Signing key for session cookies.
+ *
+ * Set SESSION_SECRET in production. If it is missing we persist a generated
+ * key in .data/session-secret so a single-instance deployment still works and
+ * keeps sessions across restarts (a warning is logged).
+ */
 function sessionSecret() {
-  const secret = process.env.SESSION_SECRET ?? process.env.DATABASE_URL;
-  if (!secret) throw new Error("Set SESSION_SECRET to enable secure sessions");
-  return secret;
+  if (process.env.SESSION_SECRET) return process.env.SESSION_SECRET;
+  if (cachedSecret) return cachedSecret;
+  cachedSecret = process.env.NODE_ENV === "production" ? loadOrCreateSecret() : developmentSecret;
+  return cachedSecret;
+}
+
+function loadOrCreateSecret() {
+  const file = resolve(process.cwd(), process.env.SESSION_SECRET_FILE ?? ".data/session-secret");
+  try {
+    if (existsSync(file)) return readFileSync(file, "utf8").trim();
+    const secret = randomBytes(32).toString("hex");
+    mkdirSync(dirname(file), { recursive: true });
+    writeFileSync(file, secret, { mode: 0o600 });
+    console.warn(`[jotna] SESSION_SECRET is not set — generated ${file} for this instance. Set it explicitly when running more than one server.`);
+    return secret;
+  } catch {
+    console.warn("[jotna] SESSION_SECRET is not set and could not be persisted; sessions will reset when the server restarts.");
+    return randomBytes(32).toString("hex");
+  }
 }
 
 export function createSessionToken(userId: string) {
