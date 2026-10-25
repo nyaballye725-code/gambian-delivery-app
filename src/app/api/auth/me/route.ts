@@ -4,12 +4,18 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { getCurrentUser } from "@/lib/auth";
 import { ensureSeeded } from "@/lib/demo-data";
+import { demoMode, demoRoleAccounts } from "@/lib/demo-mode";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   await ensureSeeded();
-  return NextResponse.json({ user: await getCurrentUser() });
+  return NextResponse.json({
+    user: await getCurrentUser(),
+    demoMode,
+    // Sent so the sign-in screen can render the shortcuts it will actually get.
+    demoAccounts: demoMode ? demoRoleAccounts : [],
+  });
 }
 
 export async function PATCH(request: Request) {

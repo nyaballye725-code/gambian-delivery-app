@@ -84,6 +84,21 @@ async function main() {
   const anonymousMe = await anonymous.get("/api/auth/me");
   check("anonymous /me returns null user", anonymousMe.status === 200 && anonymousMe.body?.user === null);
 
+  section("Demo mode");
+  const demoMe = await anonymousMe;
+  check("demo mode is advertised on /api/auth/me", demoMe.body?.demoMode === true && demoMe.body?.demoAccounts?.length === 3);
+  check("/api/auth/me never exposes demo passwords", !JSON.stringify(demoMe.body?.demoAccounts ?? []).includes("jotna2026"));
+  const demoClient = new Client("demo");
+  const demoEntry = await demoClient.post("/api/auth/demo", { role: "customer" });
+  check("one-click demo entry creates a session", demoEntry.status === 200 && demoEntry.body?.user?.role === "customer", `status ${demoEntry.status}`);
+  const demoSession = await demoClient.get("/api/auth/me");
+  check("demo session is a real signed-in session", demoSession.body?.user?.email === "aisha@jotna.gm");
+  const badDemoRole = await (new Client("demo-bad")).post("/api/auth/demo", { role: "owner" });
+  check("unknown demo roles are rejected", badDemoRole.status === 400, `status ${badDemoRole.status}`);
+  const demoDriver = new Client("demo-driver");
+  const demoDriverEntry = await demoDriver.post("/api/auth/demo", { role: "driver" });
+  check("demo entry works for riders too", demoDriverEntry.body?.user?.role === "driver", `status ${demoDriverEntry.status}`);
+
   section("Admin sign-in & workspace");
   const admin = new Client("admin");
   const adminLogin = await admin.post("/api/auth/login", { email: "admin@jotna.gm", password: "jotna2026" });
