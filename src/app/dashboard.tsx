@@ -19,6 +19,7 @@ import {
   CreditCard,
   Filter,
   Home,
+  Info,
   LayoutDashboard,
   Leaf,
   LogOut,
@@ -111,12 +112,8 @@ type DialogState =
   | { type: "checkout"; store: StoreRecord }
   | null;
 type WorkspaceData = { orders: OrderRecord[]; stores: StoreRecord[]; products: ProductRecord[]; users: UserRecord[] };
+type DemoAccount = { role: Role; email: string; name: string; color: string; description: string };
 
-const DEMO_ACCOUNTS: { role: Role; name: string; email: string; password: string; color: string }[] = [
-  { role: "admin", name: "Operations team", email: "admin@jotna.gm", password: "jotna2026", color: "green" },
-  { role: "customer", name: "Aisha Jallow", email: "aisha@jotna.gm", password: "jotna2026", color: "coral" },
-  { role: "driver", name: "Lamin Touray", email: "lamin@jotna.gm", password: "jotna2026", color: "blue" },
-];
 const ORDER_STATUSES: OrderStatus[] = ["pending", "confirmed", "preparing", "ready", "picked_up", "delivered", "cancelled"];
 
 async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -274,15 +271,18 @@ function ModalFrame({ title, subtitle, onClose, children, wide = false }: { titl
   );
 }
 
-function LoginScreen({ onLogin, onRegister }: {
+function LoginScreen({ onLogin, onRegister, onDemo, demoMode, demoAccounts }: {
   onLogin: (email: string, password: string) => Promise<void>;
   onRegister: (details: { name: string; email: string; password: string; city: string }) => Promise<void>;
+  onDemo: (role: Role) => Promise<void>;
+  demoMode: boolean;
+  demoAccounts: DemoAccount[];
 }) {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [name, setName] = useState("");
   const [city, setCity] = useState("Brikama");
-  const [email, setEmail] = useState(DEMO_ACCOUNTS[0].email);
-  const [password, setPassword] = useState(DEMO_ACCOUNTS[0].password);
+  const [email, setEmail] = useState(demoAccounts[0]?.email ?? "");
+  const [password, setPassword] = useState(demoMode ? "jotna2026" : "");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [activeDemo, setActiveDemo] = useState<Role | "">("");
@@ -295,24 +295,35 @@ function LoginScreen({ onLogin, onRegister }: {
       setEmail("");
       setPassword("");
     } else {
-      setEmail(DEMO_ACCOUNTS[0].email);
-      setPassword(DEMO_ACCOUNTS[0].password);
+      setEmail(demoAccounts[0]?.email ?? "");
+      setPassword(demoMode ? "jotna2026" : "");
     }
   }
 
-  async function submit(event?: FormEvent<HTMLFormElement>, credentials?: { email: string; password: string; role: Role }) {
+  async function submit(event?: FormEvent<HTMLFormElement>) {
     event?.preventDefault();
     setError("");
     setBusy(true);
-    setActiveDemo(credentials?.role ?? "");
     try {
-      if (mode === "signup" && !credentials) {
+      if (mode === "signup") {
         await onRegister({ name, email, password, city });
       } else {
-        await onLogin(credentials?.email ?? email, credentials?.password ?? password);
+        await onLogin(email, password);
       }
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "We couldn't sign you in. Try again.");
+      setBusy(false);
+    }
+  }
+
+  async function enterDemo(role: Role) {
+    setError("");
+    setBusy(true);
+    setActiveDemo(role);
+    try {
+      await onDemo(role);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "That demo account isn't available right now.");
       setBusy(false);
       setActiveDemo("");
     }
@@ -359,23 +370,25 @@ function LoginScreen({ onLogin, onRegister }: {
             </>}
             <label className="field-label" htmlFor="login-email">Email address</label>
             <div className="input-wrap"><span className="input-leading">@</span><input id="login-email" type="email" autoComplete="username" value={email} onChange={(event) => setEmail(event.target.value)} placeholder="you@example.com" required /></div>
-            <div className="password-row"><label className="field-label" htmlFor="login-password">Password</label>{mode === "signin" ? <span>Demo: <strong>jotna2026</strong></span> : <span>At least 8 characters</span>}</div>
+            <div className="password-row"><label className="field-label" htmlFor="login-password">Password</label>{mode === "signup" ? <span>At least 8 characters</span> : demoMode ? <span>Demo: <strong>jotna2026</strong></span> : <span>&nbsp;</span>}</div>
             <div className="input-wrap"><span className="input-leading"><span className="lock-symbol">⌑</span></span><input id="login-password" type="password" autoComplete={mode === "signin" ? "current-password" : "new-password"} value={password} onChange={(event) => setPassword(event.target.value)} placeholder={mode === "signup" ? "Choose a password" : undefined} required minLength={mode === "signup" ? 8 : undefined} /></div>
             {error && <div className="form-error" role="alert">{error}</div>}
             <button className="button button-dark button-full login-submit" type="submit" disabled={busy}>{busy ? <span className="spinner" /> : <>{mode === "signin" ? "Sign in" : "Create my account"} <ArrowRight size={17} /></>}</button>
           </form>
-          {mode === "signin" ? <>
-            <div className="login-divider"><span />or explore a demo account<span /></div>
+          {mode === "signin" ? (demoMode ? <>
+            <div className="login-divider"><span />or step into a demo account<span /></div>
+            <div className="demo-banner"><span className="demo-banner-badge">DEMO MODE</span><span>Sample data — orders, shops and riders are all playable.</span></div>
             <div className="demo-list">
-              {DEMO_ACCOUNTS.map((account) => (
-                <button key={account.role} type="button" className={`demo-account ${activeDemo === account.role ? "demo-active" : ""}`} disabled={busy} onClick={() => { setEmail(account.email); setPassword(account.password); void submit(undefined, account); }}>
+              {demoAccounts.map((account) => (
+                <button key={account.role} type="button" className={`demo-account ${activeDemo === account.role ? "demo-active" : ""}`} disabled={busy} onClick={() => void enterDemo(account.role)}>
                   <Avatar name={account.name} color={account.color} size="small" />
-                  <span className="demo-account-copy"><strong>{account.name}</strong><small>{account.role === "admin" ? "Admin dashboard" : account.role === "customer" ? "Customer account" : "Driver dashboard"}</small></span>
+                  <span className="demo-account-copy"><strong>{account.name}<span className="demo-role-tag">{account.role}</span></strong><small>{account.description}</small></span>
                   <span className="demo-enter">{activeDemo === account.role ? <span className="spinner spinner-dark" /> : <ArrowRight size={16} />}</span>
                 </button>
               ))}
             </div>
-          </> : <p className="auth-footnote">Riders and shop accounts are created by the Jotna operations team. <button type="button" className="text-button" onClick={() => switchMode("signin")}>Sign in instead</button></p>}
+            <p className="demo-note"><Info size={13} /> One click signs you in — no password needed. Turn this off with <code>DEMO_MODE=false</code>.</p>
+          </> : <p className="auth-footnote">Demo access is turned off for this deployment. <button type="button" className="text-button" onClick={() => switchMode("signup")}>Create an account</button> or ask an admin for credentials.</p>) : <p className="auth-footnote">Riders and shop accounts are created by the Jotna operations team. <button type="button" className="text-button" onClick={() => switchMode("signin")}>Sign in instead</button></p>}
           <div className="login-foot"><span>🇬🇲 &nbsp; Built for The Gambia</span><span>GMD · Greater Banjul Area</span></div>
         </div>
       </section>
@@ -469,6 +482,8 @@ export default function DashboardApp() {
   const [driverTab, setDriverTab] = useState<"available" | "active" | "completed">("available");
   const [profileSaving, setProfileSaving] = useState(false);
   const [now, setNow] = useState(() => Date.now());
+  const [demoMode, setDemoMode] = useState(false);
+  const [demoAccounts, setDemoAccounts] = useState<DemoAccount[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
 
   const notify = useCallback((message: string) => {
@@ -502,8 +517,10 @@ export default function DashboardApp() {
     let mounted = true;
     async function bootstrap() {
       try {
-        const result = await api<{ user: SessionUser | null }>("/api/auth/me");
+        const result = await api<{ user: SessionUser | null; demoMode?: boolean; demoAccounts?: DemoAccount[] }>("/api/auth/me");
         if (!mounted) return;
+        setDemoMode(Boolean(result.demoMode));
+        setDemoAccounts(result.demoAccounts ?? []);
         setUser(result.user);
         if (result.user) {
           const data = await getWorkspace(result.user.role);
@@ -565,6 +582,13 @@ export default function DashboardApp() {
 
   async function handleLogin(email: string, password: string) {
     const result = await api<{ user: SessionUser }>("/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) });
+    setUser(result.user);
+    setView(result.user.role === "admin" ? "overview" : result.user.role === "customer" ? "home" : "deliveries");
+    await loadData(result.user.role);
+  }
+
+  async function handleDemo(role: Role) {
+    const result = await api<{ user: SessionUser }>("/api/auth/demo", { method: "POST", body: JSON.stringify({ role }) });
     setUser(result.user);
     setView(result.user.role === "admin" ? "overview" : result.user.role === "customer" ? "home" : "deliveries");
     await loadData(result.user.role);
@@ -869,7 +893,7 @@ export default function DashboardApp() {
   const teamCustomers = team.filter((account) => account.role === "customer");
 
   if (booting) return <div className="boot-screen"><span className="brand-mark"><Navigation size={18} fill="currentColor" /></span><span className="boot-word">jotna<span>.</span></span><span className="spinner spinner-dark" /></div>;
-  if (!user) return <LoginScreen onLogin={handleLogin} onRegister={handleRegister} />;
+  if (!user) return <LoginScreen onLogin={handleLogin} onRegister={handleRegister} onDemo={handleDemo} demoMode={demoMode} demoAccounts={demoAccounts} />;
 
   const adminNavigation: { label: string; view: View; icon: LucideIcon }[] = [
     { label: "Overview", view: "overview", icon: LayoutDashboard },
@@ -934,6 +958,7 @@ export default function DashboardApp() {
       <aside className={`sidebar ${mobileOpen ? "sidebar-open" : ""}`}>
         <div className="sidebar-brand-row"><a href="#" className="brand brand-light"><span className="brand-mark"><Navigation size={17} fill="currentColor" /></span><span>jotna<span className="brand-period">.</span></span></a><button className="icon-button mobile-close" aria-label="Close navigation" onClick={() => setMobileOpen(false)}><X size={19} /></button></div>
         <div className="sidebar-location"><span className="location-icon"><MapPin size={14} /></span><span><strong>GREATER BANJUL</strong><small>Delivery zone · The Gambia</small></span><span className="online-pulse" /></div>
+        {demoMode && <div className="demo-ribbon"><span>DEMO</span> Sample data you can play with</div>}
         <div className="nav-label">WORKSPACE</div>
         <nav className="sidebar-nav" aria-label="Main navigation">
           {navigation.map((item) => {

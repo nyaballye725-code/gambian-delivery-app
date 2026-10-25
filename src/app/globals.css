@@ -1018,3 +1018,15 @@ a { color: inherit; text-decoration: none; }
 .add-product-button:disabled { cursor: not-allowed; opacity: .45; }
 .courier-select select { max-width: 158px; }
 .courier-select select:disabled { color: #8b968d; cursor: default; }
+
+/* ---------------------------------------------------------------------------
+   Demo mode
+   --------------------------------------------------------------------------- */
+.demo-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 0 0 10px; padding: 9px 11px; border: 1px solid #e4efd6; border-radius: 10px; color: #5c7358; background: #f6faf1; font-size: 12px; line-height: 1.45; }
+.demo-banner-badge { padding: 3px 7px; border-radius: 5px; color: #2f5a37; background: var(--leaf); font-size: 10px; font-weight: 800; letter-spacing: .7px; }
+.demo-role-tag { margin-left: 7px; padding: 1px 6px; border-radius: 5px; color: #6c8a68; background: #eef4e9; font-size: 10px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; }
+.demo-note { display: flex; align-items: flex-start; gap: 6px; margin: 10px 0 0; color: #98a399; font-size: 12px; line-height: 1.5; }
+.demo-note svg { flex: 0 0 auto; margin-top: 2px; }
+.demo-note code { padding: 1px 5px; border-radius: 4px; background: #f1f4ef; color: #5f7462; font-size: 11px; }
+.demo-ribbon { display: flex; align-items: center; gap: 7px; margin: 0 2px 14px; padding: 7px 10px; border: 1px dashed rgba(201, 242, 139, .35); border-radius: 9px; color: #a9c2ab; font-size: 11px; line-height: 1.35; }
+.demo-ribbon > span { padding: 2px 6px; border-radius: 4px; color: #16311f; background: var(--leaf); font-size: 9px; font-weight: 800; letter-spacing: .6px; }

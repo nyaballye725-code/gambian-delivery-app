@@ -24,10 +24,20 @@ There is **nothing else to configure**. Without `DATABASE_URL` the app creates a
 Postgres-compatible database with [PGlite](https://pglite.dev) in `.data/pglite`, applies the
 schema, and seeds demo data on first request. Delete the `.data` folder to start over.
 
+### Demo mode
+
+Demo mode is on by default. The sign-in screen shows a **DEMO MODE** panel with one click per
+role — no password needed — and the signed-in workspace is marked as sample data.
+
+It is a single server-side switch: set `DEMO_MODE=false` and both the shortcut panel and the
+`POST /api/auth/demo` endpoint disappear (`403`). The accounts still work with their password.
+
+The demo panel talks to the server, so it grants a real signed-in session rather than mocking
+the UI — every screen is running against the same API and database as production.
+
 ### Demo accounts
 
-All demo accounts use the password **`jotna2026`**. They are also one-click buttons on the
-sign-in screen.
+All demo accounts use the password **`jotna2026`**.
 
 | Role     | Email              | What you can do                                        |
 | -------- | ------------------ | ------------------------------------------------------ |
@@ -101,6 +111,7 @@ All endpoints return JSON. Mutations require a session unless noted.
 | GET    | `/api/health`          | public                | Readiness probe (database + schema)       |
 | POST   | `/api/auth/login`      | public                | Sign in, rate limited                     |
 | POST   | `/api/auth/register`   | public                | Customer signup, rate limited             |
+| POST   | `/api/auth/demo`       | demo mode only        | One-click demo session, rate limited      |
 | POST   | `/api/auth/logout`     | public                | Clear session                             |
 | GET    | `/api/auth/me`         | session               | Current user                              |
 | PATCH  | `/api/auth/me`         | session               | Update own profile / rider availability   |
@@ -149,6 +160,7 @@ npm run test:api       # in another
 | `DATABASE_URL`       | _(unset)_                  | Unset → embedded PGlite in `.data/pglite`                 |
 | `DATABASE_POOL_SIZE` | `10`                       | Max pooled Postgres connections                           |
 | `SESSION_SECRET`     | generated in `.data` (prod) | **Set this** in production; must be shared by all instances |
+| `DEMO_MODE`          | `true`                     | `false` removes one-click demo sign-in (see below)          |
 | `PGLITE_DATA_DIR`    | `.data/pglite`             | Embedded database location                                |
 
 ## Project structure
@@ -183,6 +195,12 @@ scripts/
   local disk and does not share state across instances.
 - The rate limiter is in-memory; use Redis or a platform WAF when running many instances.
 - Payments are simulated (cash / QMoney / Wave labels). No payment provider is integrated.
+
+## Demo mode in a real deployment
+
+`DEMO_MODE` defaults to on so the app is immediately explorable. Before going live, either set
+`DEMO_MODE=false` or remove the seeded demo accounts — otherwise anyone can sign in as the
+operations admin without a password.
 
 ## Not included (deliberately out of scope)
 
