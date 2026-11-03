@@ -44,6 +44,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 
 type Role = "admin" | "customer" | "driver";
@@ -332,7 +333,7 @@ function LoginScreen({ onLogin, onRegister, onDemo, demoMode, demoAccounts }: {
   return (
     <main className="login-page">
       <section className="login-story">
-        <a href="#" className="brand brand-dark" aria-label="Jotna home"><span className="brand-mark"><Navigation size={18} fill="currentColor" /></span><span>jotna<span className="brand-period">.</span></span></a>
+        <Link href="/" className="brand brand-dark" aria-label="Jotna home"><span className="brand-mark"><Navigation size={18} fill="currentColor" /></span><span>jotna<span className="brand-period">.</span></span></Link>
         <div className="story-copy">
           <span className="eyebrow eyebrow-light"><span className="eyebrow-dot" /> THE GAMBIA, DELIVERED</span>
           <h1>Good things<br />are <em>on the way.</em></h1>
@@ -351,7 +352,8 @@ function LoginScreen({ onLogin, onRegister, onDemo, demoMode, demoAccounts }: {
       </section>
       <section className="login-panel">
         <div className="login-panel-inner">
-          <div className="login-mobile-brand"><a href="#" className="brand brand-dark"><span className="brand-mark"><Navigation size={18} fill="currentColor" /></span><span>jotna<span className="brand-period">.</span></span></a><span className="mini-country">🇬🇲 &nbsp; THE GAMBIA</span></div>
+          <div className="login-mobile-brand"><Link href="/" className="brand brand-dark"><span className="brand-mark"><Navigation size={18} fill="currentColor" /></span><span>jotna<span className="brand-period">.</span></span></Link><span className="mini-country">🇬🇲 &nbsp; THE GAMBIA</span></div>
+          <Link href="/" className="text-button" style={{ marginBottom: 18, color: "#7b877d" }}>← Back to jotna.gm</Link>
           <div className="login-heading">
             <span className="eyebrow"><span className="eyebrow-dot" /> YOUR LOCAL DELIVERY CREW</span>
             <h2>{mode === "signin" ? "Welcome back" : "Join the neighbourhood"}</h2>
@@ -956,7 +958,7 @@ export default function DashboardApp() {
     <div className="app-frame">
       {mobileOpen && <button className="sidebar-scrim" aria-label="Close navigation" onClick={() => setMobileOpen(false)} />}
       <aside className={`sidebar ${mobileOpen ? "sidebar-open" : ""}`}>
-        <div className="sidebar-brand-row"><a href="#" className="brand brand-light"><span className="brand-mark"><Navigation size={17} fill="currentColor" /></span><span>jotna<span className="brand-period">.</span></span></a><button className="icon-button mobile-close" aria-label="Close navigation" onClick={() => setMobileOpen(false)}><X size={19} /></button></div>
+        <div className="sidebar-brand-row"><Link href="/" className="brand brand-light" aria-label="Jotna home"><span className="brand-mark"><Navigation size={17} fill="currentColor" /></span><span>jotna<span className="brand-period">.</span></span></Link><button className="icon-button mobile-close" aria-label="Close navigation" onClick={() => setMobileOpen(false)}><X size={19} /></button></div>
         <div className="sidebar-location"><span className="location-icon"><MapPin size={14} /></span><span><strong>GREATER BANJUL</strong><small>Delivery zone · The Gambia</small></span><span className="online-pulse" /></div>
         {demoMode && <div className="demo-ribbon"><span>DEMO</span> Sample data you can play with</div>}
         <div className="nav-label">WORKSPACE</div>

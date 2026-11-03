@@ -7,6 +7,14 @@ runs the whole marketplace from one workspace.
 Built with Next.js 16 (App Router), React 19, TypeScript, Drizzle ORM and Postgres — with an
 embedded PGlite database for zero-setup local runs.
 
+The repository is both a **public website** and the **ordering platform**:
+
+```
+/            public marketing site (services, coverage, rider recruitment, contact)
+/app         the product — sign in as customer, rider or operations
+/api/*       JSON API used by the app
+```
+
 ```
 customer  →  browse shops → basket → checkout → live order progress
 admin     →  shops & menus, inventory, orders, riders, customers, analytics
@@ -17,12 +25,34 @@ driver    →  go online → nearby queue → accept → picked up → delivered
 
 ```bash
 npm install
-npm run dev            # http://localhost:3000
+npm run dev
+# website → http://localhost:3000
+# app     → http://localhost:3000/app
 ```
 
 There is **nothing else to configure**. Without `DATABASE_URL` the app creates a local
 Postgres-compatible database with [PGlite](https://pglite.dev) in `.data/pglite`, applies the
 schema, and seeds demo data on first request. Delete the `.data` folder to start over.
+
+### The public website
+
+The marketing site is server-rendered (no client JavaScript except the mobile menu) and uses
+the same design tokens as the product:
+
+| Page | What it covers |
+| --- | --- |
+| `/` | Hero, services, how it works, coverage & fees, the app, rider recruitment, quotes, FAQ |
+| `/riders` | Rider earnings, requirements, onboarding steps, rider FAQ, WhatsApp application |
+| `/contact` | WhatsApp, phone, email, shop partnerships, rider support, opening hours |
+| `/privacy`, `/terms` | Privacy policy and terms of service |
+| `/sitemap.xml`, `/robots.txt`, `/manifest.webmanifest` | SEO and install metadata |
+
+All business details — phone, WhatsApp, email, address, delivery areas, fees, hours — live in
+one file: [`src/lib/site.ts`](src/lib/site.ts). Edit that file and every page, the footer, the
+JSON-LD structured data and the sitemap update together. Photography lives in `public/photos`.
+
+> The shop count, testimonials and example rider earnings are **illustrative copy**. Review
+> them (and the placeholder contact details in `src/lib/site.ts`) before a real launch.
 
 ### Demo mode
 
@@ -144,6 +174,9 @@ All endpoints return JSON. Mutations require a session unless noted.
 | `npm run db:push`   | Push the Drizzle schema to `DATABASE_URL`          |
 | `npm run db:generate` | Generate SQL migrations into `drizzle/`          |
 | `npm run db:studio` | Open Drizzle Studio                                |
+| `npm run deploy:gcloud` | Deploy to Google Cloud Run (see `DEPLOY.md`)    |
+| `npm run docker:build` | Build the production container image             |
+| `npm run docker:run` | Run the container locally on `:8080`               |
 
 The API test covers signup, sessions, catalogue, stock reservation, cancellation and
 restocking, the full delivery lifecycle, and every role's permissions:
@@ -168,11 +201,19 @@ npm run test:api       # in another
 ```
 src/
   app/
+    (site)/         public website: home, riders, contact, privacy, terms
+    app/            /app — mounts the role-aware dashboard
     api/            route handlers (auth, stores, products, orders, users, health)
     dashboard.tsx   the whole client app (role-aware workspace)
-    globals.css     design system and responsive layout
-    layout.tsx      metadata and document shell
-    page.tsx        mounts the dashboard
+    site.css        public website design layer
+    globals.css     product design system and responsive layout
+    layout.tsx      metadata, structured data base and document shell
+    sitemap.ts      /sitemap.xml
+    robots.ts       /robots.txt
+    manifest.ts     /manifest.webmanifest
+  components/site/  website header, footer and shared chrome
+
+  lib/site.ts       public website content and contact details
   db/
     index.ts        lazy Postgres/PGlite connection
     bootstrap.ts    idempotent schema application (advisory-locked)
@@ -187,14 +228,36 @@ scripts/
   api-smoke-test.mjs
 ```
 
-## Deployment notes
+## Deployment
 
-- Run `npm run build` then `npm start`. Set `DATABASE_URL` and `SESSION_SECRET`.
+The app ships with everything needed to run on **Google Cloud Run**:
+
+```bash
+PROJECT=your-project-id SITE_URL=https://jotna.gm DEMO_MODE=false ./scripts/deploy-gcloud.sh
+```
+
+That builds the `Dockerfile` with Cloud Build, stores `SESSION_SECRET` in Secret Manager and
+deploys the service. `cloudbuild.yaml` does the same in CI. Full walkthrough — Cloud SQL,
+custom domains, cost, rollback, troubleshooting and a pre-launch security checklist — is in
+**[DEPLOY.md](DEPLOY.md)**.
+
+The container works anywhere (Cloud Run, GKE, Compute Engine, Fly, Railway):
+
+```bash
+docker build -t jotna:local .
+docker run --rm -p 8080:8080 -e SESSION_SECRET=... -e DATABASE_URL=... jotna:local
+```
+
+Deployment notes:
+
+- Run `npm run build` then `npm start` for a non-container deployment. Set `DATABASE_URL` and `SESSION_SECRET`.
 - Session cookies are `HttpOnly`, `SameSite=Lax`, and `Secure` in production.
 - The embedded PGlite database is intended for local development and previews: it lives on
-  local disk and does not share state across instances.
+  local disk and does not share state across instances. Cloud Run needs Cloud SQL.
 - The rate limiter is in-memory; use Redis or a platform WAF when running many instances.
 - Payments are simulated (cash / QMoney / Wave labels). No payment provider is integrated.
+- The public website has no database dependency at all — it renders statically and reads its
+  copy from `src/lib/site.ts`.
 
 ## Demo mode in a real deployment
 
@@ -205,4 +268,4 @@ operations admin without a password.
 ## Not included (deliberately out of scope)
 
 Password reset email delivery, push/SMS notifications, saved addresses, shop-owner accounts,
-card payments, and a public marketing site.
+and card payments.
