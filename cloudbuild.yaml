@@ -1,0 +1,62 @@
+# ---------------------------------------------------------------------------
+# Cloud Build pipeline: build the Dockerfile, push to Artifact Registry, deploy
+# the new revision to Cloud Run.
+#
+#   gcloud builds submit --config cloudbuild.yaml \
+#     --substitutions=_REGION=europe-west1,_SERVICE=jotna,_SITE_URL=https://jotna.gm
+#
+# SESSION_SECRET is read from Secret Manager (create it first — see DEPLOY.md).
+# Runtime environment variables are managed here; edit them if you need more.
+# ---------------------------------------------------------------------------
+substitutions:
+  _REGION: europe-west1
+  _SERVICE: jotna
+  _REPOSITORY: jotna
+  _SITE_URL: https://jotna.gm
+  _DEMO_MODE: "false"
+  _MEMORY: 1Gi
+  _MAX_INSTANCES: "10"
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+
+images:
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$SHORT_SHA"
+  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:latest"
+
+steps:
+  - id: build-image
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - --build-arg=SITE_URL=${_SITE_URL}
+      - -t=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$SHORT_SHA
+      - -t=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:latest
+      - .
+
+  - id: push-image
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - --all-tags
+      - ${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}
+
+  - id: deploy-cloud-run
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - ${_SERVICE}
+      - --image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$SHORT_SHA
+      - --region=${_REGION}
+      - --platform=managed
+      - --allow-unauthenticated
+      - --port=8080
+      - --cpu=1
+      - --memory=${_MEMORY}
+      - --min-instances=0
+      - --max-instances=${_MAX_INSTANCES}
+      - --timeout=300
+      - --set-env-vars=NODE_ENV=production,DEMO_MODE=${_DEMO_MODE},SITE_URL=${_SITE_URL}
+      - --set-secrets=SESSION_SECRET=jotna-session-secret:latest

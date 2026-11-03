@@ -1,0 +1,17 @@
+# Files excluded when deploying with `gcloud run deploy --source .`
+.git
+.gitignore
+node_modules
+.next
+out
+build
+.data
+coverage
+.vercel
+.eslintcache
+*.tsbuildinfo
+*.log
+.env
+.env.*
+!.env.example
+multi-role-delivery-app-development.zip

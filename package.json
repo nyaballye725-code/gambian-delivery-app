@@ -11,7 +11,10 @@
     "db:generate": "drizzle-kit generate",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "test:api": "node scripts/api-smoke-test.mjs"
+    "test:api": "node scripts/api-smoke-test.mjs",
+    "deploy:gcloud": "bash scripts/deploy-gcloud.sh",
+    "docker:build": "docker build -t jotna:local .",
+    "docker:run": "docker run --rm -p 8080:8080 -e PORT=8080 -e DEMO_MODE=true jotna:local"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.3.11",
@@ -37,7 +40,7 @@
     "typescript": "5.9.3"
   },
   "version": "1.0.0",
-  "description": "Jotna \u2014 a multi-role local delivery platform for The Gambia (Next.js, Postgres/Drizzle).",
+  "description": "Jotna — a multi-role local delivery platform for The Gambia (Next.js, Postgres/Drizzle).",
   "engines": {
     "node": ">=20"
   }
