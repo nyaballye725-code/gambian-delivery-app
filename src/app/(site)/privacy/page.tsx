@@ -88,7 +88,8 @@ export default function PrivacyPage() {
             <h2>Contact</h2>
             <p>
               Questions or requests: <a href={`mailto:${site.email}`}>{site.email}</a> or{" "}
-              <a href={site.phoneHref}>{site.phoneDisplay}</a>. Our base is {site.address.display}.
+              <a href={site.phoneHref}>{site.phoneDisplay}</a> or{" "}
+              <a href={site.secondPhoneHref}>{site.secondPhoneDisplay}</a>. Our base is {site.address.display}.
             </p>
 
             <p style={{ marginTop: 32 }}>

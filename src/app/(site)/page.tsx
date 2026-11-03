@@ -562,11 +562,13 @@ export default function HomePage() {
                 <p>Order help, shop partnerships, rider applications — same inbox.</p>
                 <div className="s-faq-contact">
                   <a href={whatsappLink("Hi Jotna! I have a question.")} target="_blank" rel="noopener noreferrer">
-                    <MessageCircle size={16} /> WhatsApp {site.phoneDisplay}
+                    <MessageCircle size={16} /> WhatsApp the team
                   </a>
-                  <a href={site.phoneHref}>
-                    <Headphones size={16} /> Call the operations desk
-                  </a>
+                  {site.phones.map((phone) => (
+                    <a key={phone.href} href={phone.href}>
+                      <Headphones size={16} /> Call {phone.display}
+                    </a>
+                  ))}
                 </div>
               </div>
             </div>

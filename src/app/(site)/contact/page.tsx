@@ -70,9 +70,13 @@ export default function ContactPage() {
               <span className="s-icon-tile"><Phone size={20} /></span>
               <h3>Call the operations desk</h3>
               <p>For an order that is already on the road, or if you are not on WhatsApp.</p>
-              <a className="s-link-arrow" href={site.phoneHref}>
-                {site.phoneDisplay} <ArrowRight size={14} />
-              </a>
+              <div className="s-link-stack">
+                {site.phones.map((phone) => (
+                  <a key={phone.href} href={phone.href}>
+                    {phone.display} <ArrowRight size={14} />
+                  </a>
+                ))}
+              </div>
             </article>
 
             <article className="s-contact-card">
@@ -113,6 +117,7 @@ export default function ContactPage() {
               <div className="s-info-panel" style={{ marginTop: 26 }}>
                 <h3>At a glance</h3>
                 <div className="s-info-row"><span><Clock3 size={14} /> Opening hours</span><strong>{site.hours}</strong></div>
+                <div className="s-info-row"><span><Phone size={14} /> Phone</span><strong>{site.phones.map((phone) => phone.display).join(" · ")}</strong></div>
                 <div className="s-info-row"><span><MapPin size={14} /> Base</span><strong>{site.address.display}</strong></div>
                 <div className="s-info-row"><span><MapPin size={14} /> Delivery areas</span><strong>Banjul · Serekunda · Bakau · Bijilo · Brikama</strong></div>
                 <div className="s-info-row"><span><Wallet size={14} /> Payments</span><strong>Cash · QMoney · Wave</strong></div>

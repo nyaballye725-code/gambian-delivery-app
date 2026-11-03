@@ -426,6 +426,9 @@
 .s-contact-card h3 { margin: 16px 0 6px; font-size: 18px; font-weight: 750; letter-spacing: -.4px; }
 .s-contact-card p { margin: 0 0 18px; color: var(--site-muted); font-size: 13.5px; line-height: 1.65; }
 .s-contact-card .s-link-arrow { display: inline-flex; align-items: center; gap: 7px; margin-top: auto; color: #3f6b47; font-size: 13.5px; font-weight: 800; }
+.s-link-stack { display: flex; flex-direction: column; gap: 9px; margin-top: auto; }
+.s-link-stack a { display: inline-flex; align-items: center; gap: 7px; color: #3f6b47; font-size: 13.5px; font-weight: 800; }
+.s-link-stack a:hover { color: var(--site-forest-deep); }
 .s-info-panel { padding: 28px; border-radius: var(--site-radius); background: var(--site-cream); }
 .s-info-panel h3 { margin: 0 0 14px; font-size: 16px; font-weight: 750; }
 .s-info-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 12px 0; border-bottom: 1px solid rgba(28, 52, 38, .08); font-size: 13.5px; }

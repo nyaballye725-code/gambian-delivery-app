@@ -48,9 +48,11 @@ export function SiteFooter() {
           <div className="s-footer-contact">
             <h4>Get in touch</h4>
             <ul>
-              <li>
-                <a href={site.phoneHref}><Phone size={14} /> {site.phoneDisplay}</a>
-              </li>
+              {site.phones.map((phone) => (
+                <li key={phone.href}>
+                  <a href={phone.href}><Phone size={14} /> {phone.display}</a>
+                </li>
+              ))}
               <li>
                 <a href={whatsappLink("Hi Jotna! I would like to place an order.")} target="_blank" rel="noopener noreferrer">
                   <MessageCircle size={14} /> WhatsApp us

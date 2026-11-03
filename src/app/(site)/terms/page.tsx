@@ -105,7 +105,8 @@ export default function TermsPage() {
             <h2>Contact and governing law</h2>
             <p>
               Questions: <a href={`mailto:${site.email}`}>{site.email}</a> or{" "}
-              <a href={site.phoneHref}>{site.phoneDisplay}</a>. These terms are governed by the laws
+              <a href={site.phoneHref}>{site.phoneDisplay}</a> or{" "}
+              <a href={site.secondPhoneHref}>{site.secondPhoneDisplay}</a>. These terms are governed by the laws
               of The Gambia, and disputes are subject to the courts of The Gambia.
             </p>
 

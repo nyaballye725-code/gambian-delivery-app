@@ -11,6 +11,7 @@ import {
   Clock3,
   MapPin,
   MessageCircle,
+  Phone,
   ShieldCheck,
   Smartphone,
   Star,
@@ -262,6 +263,9 @@ export default function RidersPage() {
                 <div className="s-faq-contact">
                   <a href={whatsappLink("Hi Jotna! I have a question about riding with you.")} target="_blank" rel="noopener noreferrer">
                     <MessageCircle size={16} /> WhatsApp the rider team
+                  </a>
+                  <a href={site.phoneHref}>
+                    <Phone size={16} /> Call {site.phoneDisplay}
                   </a>
                   <a href={`mailto:${site.ridersEmail}`}>
                     <ArrowRight size={16} /> {site.ridersEmail}
