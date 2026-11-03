@@ -52,7 +52,8 @@ one file: [`src/lib/site.ts`](src/lib/site.ts). Edit that file and every page, t
 JSON-LD structured data and the sitemap update together. Photography lives in `public/photos`.
 
 > The shop count, testimonials and example rider earnings are **illustrative copy**. Review
-> them (and the placeholder contact details in `src/lib/site.ts`) before a real launch.
+> them before a real launch, and confirm the contact numbers and email addresses in
+> `src/lib/site.ts`.
 
 ### Demo mode
 

@@ -5,8 +5,9 @@
  * areas, fees, opening hours) lives here so the marketing pages never need to
  * be edited to update the business.
  *
- * NOTE: the phone, WhatsApp and email values below are placeholders. Replace
- * them with the real Jotna numbers before going live.
+ * The phone numbers below are the live Jotna contact lines. Both are shown in
+ * the footer and on the contact page; the first one is the primary line and the
+ * one used for WhatsApp links. The email addresses are still placeholders.
  */
 
 export type DeliveryArea = {
@@ -24,6 +25,16 @@ export const deliveryAreas: DeliveryArea[] = [
   { name: "Brikama", note: "Brikama town · Busumbala", eta: "45–60 min", fee: "GMD 85" },
 ];
 
+/**
+ * Contact numbers in dial order. `display` is what visitors read, `href` is the
+ * `tel:` target. The `+220` country code lives here — change it in one place if
+ * Jotna ever publishes numbers from outside The Gambia.
+ */
+export const contactNumbers: { display: string; href: string }[] = [
+  { display: "+220 877390590", href: "tel:+220877390590" },
+  { display: "+220 835364285", href: "tel:+220835364285" },
+];
+
 export const site = {
   name: "Jotna",
   legalName: "Jotna Delivery Services",
@@ -31,9 +42,12 @@ export const site = {
   description:
     "Jotna delivers food, groceries, pharmacy essentials and parcels from local shops across the Greater Banjul Area. Order online, pay with cash, QMoney or Wave, and track your rider to the gate.",
   url: (process.env.SITE_URL ?? "https://jotna.gm").replace(/\/$/, ""),
-  phoneDisplay: "+220 700 0000",
-  phoneHref: "tel:+2207000000",
-  whatsapp: "2207000000",
+  phones: contactNumbers,
+  phoneDisplay: contactNumbers[0].display,
+  phoneHref: contactNumbers[0].href,
+  secondPhoneDisplay: contactNumbers[1].display,
+  secondPhoneHref: contactNumbers[1].href,
+  whatsapp: "220877390590",
   email: "hello@jotna.gm",
   ridersEmail: "riders@jotna.gm",
   address: {
